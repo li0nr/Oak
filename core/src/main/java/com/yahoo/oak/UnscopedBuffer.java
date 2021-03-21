@@ -124,7 +124,7 @@ class UnscopedBuffer<B extends ScopedReadBuffer> implements OakUnscopedBuffer, O
     public ByteBuffer getByteBuffer() {
         return internalScopedReadBuffer.getByteBuffer();
     }
-
+    
     @Override
     public int getOffset() {
         return internalScopedReadBuffer.getOffset();

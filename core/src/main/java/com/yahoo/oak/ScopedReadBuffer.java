@@ -25,12 +25,12 @@ class ScopedReadBuffer implements OakScopedReadBuffer, OakUnsafeDirectBuffer {
         this.s = other.s.getDuplicatedSlice();
     }
 
-    protected int getDataOffset(int index) {
+    protected long getDataOffset(int index) {
         if (index < 0 || index >= getLength()) {
             throw new IndexOutOfBoundsException(String.format("Index %s is out of bound (length: %s)",
                     index, getLength()));
         }
-        return s.getOffset() + index;
+        return s.getAddress() + index;
     }
 
     protected void invalidate() {
@@ -58,37 +58,37 @@ class ScopedReadBuffer implements OakScopedReadBuffer, OakUnsafeDirectBuffer {
 
     @Override
     public byte get(int index) {
-        return s.getByteBuffer().get(getDataOffset(index));
+        return UnsafeUtils.unsafe.getByte(getDataOffset(index));
     }
 
     @Override
     public char getChar(int index) {
-        return s.getByteBuffer().getChar(getDataOffset(index));
+        return UnsafeUtils.unsafe.getChar(getDataOffset(index));
     }
 
     @Override
     public short getShort(int index) {
-        return s.getByteBuffer().getShort(getDataOffset(index));
+        return UnsafeUtils.unsafe.getShort(getDataOffset(index));
     }
 
     @Override
     public int getInt(int index) {
-        return s.getByteBuffer().getInt(getDataOffset(index));
+        return UnsafeUtils.unsafe.getInt(getDataOffset(index));
     }
 
     @Override
     public long getLong(int index) {
-        return s.getByteBuffer().getLong(getDataOffset(index));
+        return UnsafeUtils.unsafe.getLong(getDataOffset(index));
     }
 
     @Override
     public float getFloat(int index) {
-        return s.getByteBuffer().getFloat(getDataOffset(index));
+        return UnsafeUtils.unsafe.getFloat(getDataOffset(index));
     }
 
     @Override
     public double getDouble(int index) {
-        return s.getByteBuffer().getDouble(getDataOffset(index));
+        return UnsafeUtils.unsafe.getDouble(getDataOffset(index));
     }
 
     /** ------------------------------ OakUnsafeDirectBuffer ------------------------------ **/
@@ -107,7 +107,7 @@ class ScopedReadBuffer implements OakScopedReadBuffer, OakUnsafeDirectBuffer {
     @Override public ByteBuffer getByteBuffer() {
         return s.getByteBuffer();
     }
-
+    
     /**
      * @return the data offset inside the underlying ByteBuffer.
      */
