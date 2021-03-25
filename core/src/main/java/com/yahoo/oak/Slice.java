@@ -6,8 +6,6 @@
 
 package com.yahoo.oak;
 
-import java.lang.reflect.Field;
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 
 // Slice represents an data about an off-heap cut: a portion of a bigger block,
@@ -35,8 +33,7 @@ class Slice implements OakUnsafeDirectBuffer, Comparable<Slice> {
     private int length = UNDEFINED_LENGTH_OR_OFFSET;
     private int version;    // Allocation time version
     private long memAddress= 0;
-    private int allocationCapacity= 0;
-
+    private ByteBuffer buffer;
     // true if slice is associated with an off-heap slice of memory
     // if associated is false the Slice is empty
     private boolean associated = false;
@@ -96,13 +93,13 @@ class Slice implements OakUnsafeDirectBuffer, Comparable<Slice> {
      * Sets everything related to allocation of an off-heap cut: a portion of a bigger block.
      * Turns empty slice to an associated slice upon allocation.
      */
-    void associateBlockAllocation(int blockID, int offset, int length, long memAddress, int allocCap){
+    void associateBlockAllocation(int blockID, int offset, int length, long memAddress, ByteBuffer buff){
         assert blockID != NativeMemoryAllocator.INVALID_BLOCK_ID
             && offset > UNDEFINED_LENGTH_OR_OFFSET && length > UNDEFINED_LENGTH_OR_OFFSET
             && memAddress != 0;
         setBlockIdOffsetAndLength(blockID, offset, length);
         this.memAddress  = memAddress;
-        this.allocationCapacity = allocCap;
+        this.buffer = buff;
         this.associated = true;
 
         // reference and (maybe) version are yet to be set by associateMMAllocation
@@ -144,16 +141,17 @@ class Slice implements OakUnsafeDirectBuffer, Comparable<Slice> {
         this.length = other.length;
         this.version = other.version;
         this.memAddress = other.memAddress;
-        this.allocationCapacity= other.allocationCapacity;
+        this.buffer = other.buffer;
         this.reference = other.reference;
         this.associated = other.associated;
     }
 
     // Set the internal buffer.
     // This method should be used only within Memory Management package.
-    void setBuffer(long memAddress, int allocCap) {
-        this.memAddress= memAddress;
-        this.allocationCapacity = allocCap;
+    void setBuffer(ByteBuffer buff, long address) {
+        this.memAddress= address;
+        this.buffer = buff;
+        assert buffer != null;
         assert memAddress != 0;
         associated = true; // buffer is the final and the most important field for the slice validity
     }
@@ -237,7 +235,7 @@ class Slice implements OakUnsafeDirectBuffer, Comparable<Slice> {
     @Override
     public ByteBuffer getByteBuffer() {
         assert associated;
-        return wrapAddress();
+        return buffer;
     }
     
 
@@ -380,29 +378,4 @@ class Slice implements OakUnsafeDirectBuffer, Comparable<Slice> {
         header.markAsDeleted(getMetadataAddress());
     }
     
-    /*-------------- Wrapping address with bytebuffer --------------*/
-    private static final Field ADDRESS;
-    private static final Field CAPACITY;
-    static {
-        try {
-            ADDRESS = Buffer.class.getDeclaredField("address");
-            CAPACITY = Buffer.class.getDeclaredField("capacity");
-            ADDRESS.setAccessible(true);
-            CAPACITY.setAccessible(true);
-        } catch (NoSuchFieldException e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    private ByteBuffer wrapAddress() {
-        ByteBuffer bb = ByteBuffer.allocateDirect(0);
-        try {
-            ADDRESS.setLong(bb, memAddress);
-            CAPACITY.setInt(bb, allocationCapacity);
-            bb.clear();
-        } catch (IllegalAccessException e) {
-            throw new AssertionError(e);
-        }
-        return bb;
-    }
 }

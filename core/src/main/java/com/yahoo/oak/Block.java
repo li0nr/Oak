@@ -6,11 +6,16 @@
 
 package com.yahoo.oak;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import sun.misc.Cleaner;
+import sun.nio.ch.DirectBuffer;
 
+import java.lang.reflect.Field;
+import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicInteger;
 class Block {
 
     private final long memAddress;
+    private final ByteBuffer buffer;
 
     private final int capacity;
     private final AtomicInteger allocated = new AtomicInteger(0);
@@ -23,7 +28,10 @@ class Block {
         this.id = NativeMemoryAllocator.INVALID_BLOCK_ID;
         // Pay attention in allocateDirect the data is *zero'd out*
         // which has an overhead in clearing and you end up touching every page
-        this.memAddress = UnsafeUtils.unsafe.allocateMemory(this.capacity);
+        //this.memAddress = UnsafeUtils.unsafe.allocateMemory(this.capacity);
+        this.buffer = ByteBuffer.allocateDirect(this.capacity);
+        this.memAddress = ((DirectBuffer) buffer).address();
+
     }
 
     void setID(int id) {
@@ -38,7 +46,7 @@ class Block {
             allocated.getAndAdd(-size);
             throw new OakOutOfMemoryException(String.format("Block %d is out of memory", id));
         }
-        s.associateBlockAllocation(id, now, size, memAddress, capacity);
+        s.associateBlockAllocation(id, now, size, memAddress, buffer);
         return true;
     }
 
@@ -55,11 +63,29 @@ class Block {
 
     // releasing the memory back to the OS, freeing the block, an opposite of allocation, not thread safe
     void clean() {
-        UnsafeUtils.unsafe.freeMemory(memAddress);
-    }
+        Field cleanerField = null;
+        try {
+            cleanerField = buffer.getClass().getDeclaredField("cleaner");
+        } catch (NoSuchFieldException e) {
+            e.printStackTrace();
+        }
+        assert cleanerField != null;
+        cleanerField.setAccessible(true);
+        Cleaner cleaner = null;
+        try {
+            cleaner = (Cleaner) cleanerField.get(buffer);
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        }
+        assert cleaner != null;
+        cleaner.clean();    }
 
     long getmemAdress() {
         return memAddress;
+    }
+    
+    ByteBuffer getBuffer() {
+        return buffer;
     }
 
     // how many bytes a block may include, regardless allocated/free
