@@ -6,7 +6,6 @@
 
 package com.yahoo.oak;
 
-import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 /**
@@ -46,6 +45,7 @@ class ScopedReadBuffer implements OakScopedReadBuffer, OakUnsafeDirectBuffer {
     }
 
     /** ------------------------------ OakScopedReadBuffer ------------------------------ **/
+    
     @Override
     public int capacity() {
         return s.getLength();
@@ -104,9 +104,6 @@ class ScopedReadBuffer implements OakScopedReadBuffer, OakUnsafeDirectBuffer {
      *
      * @return the underlying ByteBuffer.
      */
-    @Override public ByteBuffer getByteBuffer() {
-        return s.getByteBuffer();
-    }
     
     /**
      * @return the data offset inside the underlying ByteBuffer.
@@ -121,6 +118,7 @@ class ScopedReadBuffer implements OakScopedReadBuffer, OakUnsafeDirectBuffer {
     @Override public int getLength() {
         return s.getLength();
     }
+    /** ------------------------------ OakUnsafeDirectBuffer ------------------------------ **/
 
     /**
      * Allows access to the memory address of the underlying off-heap ByteBuffer of Oak.
@@ -130,7 +128,13 @@ class ScopedReadBuffer implements OakScopedReadBuffer, OakUnsafeDirectBuffer {
      *
      * @return the exact memory address of the underlying buffer in the position of the data.
      */
-    @Override public long getAddress() {
+    @Override public long getAddress() { //for both OakUnsafeDirectBuffer -- OakScopedReadBuffer
         return s.getAddress();
     }
+    
+    //used for wrapping address with bytebuffer for external use
+    public int getNativeCapacity() {
+        return s.getCapacity();
+    }
+    
 }
