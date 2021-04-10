@@ -21,6 +21,8 @@ class NativeMemoryAllocator implements BlockMemoryAllocator {
 
     // mapping IDs to blocks allocated solely to this Allocator
     private Block[] blocksArray;
+    private long[] blockAddress;
+    
     private final AtomicInteger idGenerator = new AtomicInteger(1);
 
     /**
@@ -57,6 +59,7 @@ class NativeMemoryAllocator implements BlockMemoryAllocator {
         int blockArraySize = ((int) (capacity / blocksProvider.blockSize())) + 1;
         // first entry of blocksArray is always empty
         this.blocksArray = new Block[blockArraySize + 1];
+        this.blockAddress = new long[blockArraySize +1];
         // initially allocate one single block from pool
         // this may lazy initialize the pool and take time if this is the first call for the pool
         allocateNewCurrentBlock();
@@ -192,8 +195,8 @@ class NativeMemoryAllocator implements BlockMemoryAllocator {
         // This check should be automatically eliminated by the compiler in production.
         assert blockID > NativeMemoryAllocator.INVALID_BLOCK_ID :
                 String.format("Invalid block-id: %s", s);
-        Block b = blocksArray[blockID];
-        s.setAddress(b.getStartMemAddress());
+        //Block b = blocksArray[blockID];
+        s.setAddress(blockAddress[blockID]);
     }
 
 
@@ -212,6 +215,7 @@ class NativeMemoryAllocator implements BlockMemoryAllocator {
         Block b = blocksProvider.getBlock();
         int blockID = idGenerator.getAndIncrement();
         this.blocksArray[blockID] = b;
+        this.blockAddress[blockID] = b.getStartMemAddress();
         b.setID(blockID);
         this.currentBlock = b;
     }
