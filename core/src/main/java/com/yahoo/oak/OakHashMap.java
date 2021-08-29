@@ -28,7 +28,7 @@ public class OakHashMap<K, V>  extends AbstractMap<K, V> implements AutoCloseabl
      * memory. There can be separate memory managing algorithms for keys and values.
      * */
     private final MemoryManager valuesMemoryManager;
-    private final MemoryManager keysMemoryManager;
+    private final KeyMemoryManager keysMemoryManager;
     private final OakTransformer<K> keyDeserializeTransformer;
     private final OakTransformer<V> valueDeserializeTransformer;
     private final Function<Map.Entry<OakScopedReadBuffer, OakScopedReadBuffer>,
@@ -45,7 +45,7 @@ public class OakHashMap<K, V>  extends AbstractMap<K, V> implements AutoCloseabl
                OakComparator<K> oakComparator,
                int chunkMaxItems,
                MemoryManager vMM,
-               MemoryManager kMM) {
+               KeyMemoryManager kMM) {
         this.valuesMemoryManager = vMM;
         this.keysMemoryManager = kMM;
         this.comparator = oakComparator;

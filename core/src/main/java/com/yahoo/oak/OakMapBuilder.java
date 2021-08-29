@@ -113,7 +113,7 @@ public class OakMapBuilder<K, V> {
         }
 
         MemoryManager valuesMemoryManager = new SyncRecycleMemoryManager(memoryAllocator);
-        MemoryManager keysMemoryManager = new SeqExpandMemoryManager(memoryAllocator);
+        KeyMemoryManager keysMemoryManager = new SeqExpandMemoryManager(memoryAllocator);
         checkPreconditions();
         if (minKey == null) {
             throw new IllegalStateException("Must provide a non-null minimal key object to build the OakMap");
@@ -140,7 +140,7 @@ public class OakMapBuilder<K, V> {
         }
         //Todo assert that minkey is not null after the implmention of internalHashmap if it is throw exception??
         MemoryManager valuesMemoryManager = new SyncRecycleMemoryManager(memoryAllocator);
-        MemoryManager keysMemoryManager = new SeqExpandMemoryManager(memoryAllocator);
+        KeyMemoryManager keysMemoryManager = new SyncRecycleMemoryManager(memoryAllocator);
 
         checkPreconditions();
         return new OakHashMap<>(minKey,

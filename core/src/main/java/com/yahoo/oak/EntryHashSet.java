@@ -182,9 +182,8 @@ class EntryHashSet<K, V> extends EntryArray<K, V> {
                 return false;
             }
         }
-
         assert tempKeyBuff.isAssociated();
-        return (0 == comparator.compareKeyAndSerializedKey(key, tempKeyBuff));
+        return (0 == ((KeyMemoryManager ) keysMemoryManager).compareKeyAndSerializedKey(key, tempKeyBuff, comparator));
     }
 
     /* Check the state of the entry in `idx`

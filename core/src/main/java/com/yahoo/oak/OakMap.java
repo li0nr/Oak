@@ -49,7 +49,7 @@ public class OakMap<K, V> extends AbstractMap<K, V>
 
     // internal constructor, to create OakMap use OakMapBuilder
     OakMap(K minKey, OakSerializer<K> keySerializer, OakSerializer<V> valueSerializer, OakComparator<K> oakComparator,
-        int chunkMaxItems, MemoryManager vMM, MemoryManager kMM) {
+        int chunkMaxItems, MemoryManager vMM, KeyMemoryManager kMM) {
 
         this.valuesMemoryManager = vMM;
         this.keysMemoryManager = kMM;
