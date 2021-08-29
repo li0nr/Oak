@@ -6,6 +6,8 @@
 
 package com.yahoo.oak;
 
+
+
 import java.util.AbstractMap;
 import java.util.Comparator;
 import java.util.ConcurrentModificationException;
@@ -27,7 +29,8 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
     private final AtomicReference<OrderedChunk<K, V>> head;
     private final OakComparator<K> comparator;
     private final MemoryManager valuesMemoryManager;
-    private final MemoryManager keysMemoryManager;
+    private final KeyMemoryManager keysMemoryManager;
+
     private final OakSerializer<K> keySerializer;
     private final OakSerializer<V> valueSerializer;
     // The reference count is used to count the upper objects wrapping this internal map:
@@ -36,6 +39,7 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
     private final AtomicInteger referenceCount = new AtomicInteger(1);
     private final ValueUtils valueOperator;
 
+
     /*-------------- Constructors --------------*/
 
     /**
@@ -43,7 +47,7 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
      */
 
     InternalOakMap(K minKey, OakSerializer<K> keySerializer, OakSerializer<V> valueSerializer,
-        OakComparator<K> oakComparator, MemoryManager vMM, MemoryManager kMM, int chunkMaxItems,
+        OakComparator<K> oakComparator, MemoryManager vMM, KeyMemoryManager kMM, int chunkMaxItems,
         ValueUtils valueOperator) {
 
         super(vMM, kMM);
@@ -59,14 +63,17 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
         Comparator<Object> mixedKeyComparator = (o1, o2) -> {
             if (o1 instanceof OakScopedReadBuffer) {
                 if (o2 instanceof OakScopedReadBuffer) {
-                    return oakComparator.compareSerializedKeys((OakScopedReadBuffer) o1, (OakScopedReadBuffer) o2);
+                    return ((KeyMemoryManager) kMM).compareSerializedKeys((OakScopedReadBuffer) o1,
+                            (OakScopedReadBuffer) o2, oakComparator);
                 } else {
                     // Note the inversion of arguments, hence sign flip
-                    return (-1) * oakComparator.compareKeyAndSerializedKey((K) o2, (OakScopedReadBuffer) o1);
+                    return (-1) * ((KeyMemoryManager) kMM).compareKeyAndSerializedKey((K) o2,
+                            (OakScopedReadBuffer) o1, oakComparator);
                 }
             } else {
                 if (o2 instanceof OakScopedReadBuffer) {
-                    return oakComparator.compareKeyAndSerializedKey((K) o1, (OakScopedReadBuffer) o2);
+                    return ((KeyMemoryManager) kMM).compareKeyAndSerializedKey((K) o1,
+                            (OakScopedReadBuffer) o2, oakComparator);
                 } else {
                     return oakComparator.compareKeys((K) o1, (K) o2);
                 }
@@ -112,6 +119,7 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
                 break;
             }
         }
+
     }
 
     /*-------------- Methods --------------*/
@@ -126,7 +134,7 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
 
         // since skiplist isn't updated atomically in split/compaction, our key might belong in the next orderedChunk
         // we need to iterate the chunks until we find the correct one
-        while ((next != null) && (comparator.compareKeyAndSerializedKey(key, next.minKey) >= 0)) {
+        while ((next != null) && (keysMemoryManager.compareKeyAndSerializedKey(key, next.minKey, comparator) >= 0)) {
             curr = next;
             next = curr.next.getReference();
         }
@@ -171,6 +179,8 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
 
         engaged.forEach(OrderedChunk::release);
     }
+
+
 
     private void connectToChunkList(List<OrderedChunk<K, V>> engaged, List<OrderedChunk<K, V>> children) {
 
@@ -272,6 +282,7 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
 
         // now after removing old chunks and updating the skiplist, we can start normalizing
         firstChild.normalize();
+
     }
 
     // returns false when restart is needed
@@ -532,6 +543,10 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
                 continue;
             }
 
+            if (inTheMiddleOfRebalance(c)) {
+                continue;
+            }
+
             // AT THIS POINT Key wasn't found (key and value not valid) and context is updated
             if (logicallyDeleted) {
                 // This is the case where we logically deleted this entry (marked the value off-heap as deleted),
@@ -557,18 +572,8 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
             assert ctx.entryIndex != EntryArray.INVALID_ENTRY_INDEX;
             assert ctx.isValueValid();
             ctx.entryState = EntryArray.EntryState.DELETED_NOT_FINALIZED;
-
-            if (inTheMiddleOfRebalance(c)) {
-                continue;
-            }
-
-            // If finalize deletion returns true, meaning rebalance was done and there was NO
-            // attempt to finalize deletion. There is going the help anyway, by next rebalance
-            // or updater. Thus it is OK not to restart, the linearization point of logical deletion
-            // is owned by this thread anyway and old value is kept in v.
             finalizeDeletion(c, ctx); // includes publish/unpublish
-            return transformer == null ?
-                ctx.result.withFlag(ValueUtils.ValueResult.TRUE) : ctx.result.withValue(v);
+            return transformer == null ? ctx.result.withFlag(logicallyDeleted) : ctx.result.withValue(v);
         }
 
         throw new RuntimeException("remove failed: reached retry limit (1024).");
@@ -633,6 +638,8 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
         c.lookUp(ctx, deserializedKey);
         return ctx.isValueValid();
     }
+
+
 
     private <T> T getValueTransformation(OakScopedReadBuffer key, OakTransformer<T> transformer) {
         K deserializedKey = keySerializer.deserialize(key);
@@ -826,6 +833,8 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
 
     /*-------------- Iterators --------------*/
 
+
+
     private static final class IteratorState<K, V> {
 
         private OrderedChunk<K, V> orderedChunk;
@@ -919,7 +928,7 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
             if (lo == null) {
                 return false;
             }
-            int c = comparator.compareKeyAndSerializedKey(lo, key);
+            int c = ((KeyMemoryManager) keysMemoryManager).compareKeyAndSerializedKey(lo, key, comparator);
             return c > 0 || (c == 0 && !loInclusive);
         }
 
@@ -927,7 +936,7 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
             if (hi == null) {
                 return false;
             }
-            int c = comparator.compareKeyAndSerializedKey(hi, key);
+            int c = ((KeyMemoryManager) keysMemoryManager).compareKeyAndSerializedKey(hi, key, comparator);
             return c < 0 || (c == 0 && !hiInclusive);
         }
 

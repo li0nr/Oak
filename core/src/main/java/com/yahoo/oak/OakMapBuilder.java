@@ -113,7 +113,7 @@ public class OakMapBuilder<K, V> {
         }
 
         MemoryManager valuesMemoryManager = new SyncRecycleMemoryManager(memoryAllocator);
-        MemoryManager keysMemoryManager = new SeqExpandMemoryManager(memoryAllocator);
+        KeyMemoryManager keysMemoryManager = new SeqExpandMemoryManager(memoryAllocator);
         checkPreconditions();
         if (minKey == null) {
             throw new IllegalStateException("Must provide a non-null minimal key object to build the OakMap");
@@ -141,7 +141,7 @@ public class OakMapBuilder<K, V> {
         //Todo assert that minkey is not null after the implmention of internalHashmap if it is throw exception??
         MemoryManager valuesMemoryManager = new SyncRecycleMemoryManager(memoryAllocator);
         // for hash the keys are indeed deleted, thus SeqExpandMemoryManager isn't acceptable
-        MemoryManager keysMemoryManager = new SeqExpandMemoryManager(memoryAllocator);
+        KeyMemoryManager keysMemoryManager = new SeqExpandMemoryManager(memoryAllocator);
 
         // Number of bits to define the chunk size is calculated from given number of items
         // to be kept in one chunk. The number of chunks in the hash will be twice more than given
