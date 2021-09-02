@@ -140,7 +140,7 @@ public class OakMapBuilder<K, V> {
         }
         //Todo assert that minkey is not null after the implmention of internalHashmap if it is throw exception??
         MemoryManager valuesMemoryManager = new SyncRecycleMemoryManager(memoryAllocator);
-        KeyMemoryManager keysMemoryManager = new SyncRecycleMemoryManager(memoryAllocator);
+        KeyMemoryManager keysMemoryManager = new SeqExpandMemoryManager(memoryAllocator);
 
         checkPreconditions();
         return new OakHashMap<>(minKey,
