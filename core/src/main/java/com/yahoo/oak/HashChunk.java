@@ -41,7 +41,7 @@ class HashChunk<K, V> extends BasicChunk<K, V> {
         OakComparator<K> comparator, OakSerializer<K> keySerializer,
         OakSerializer<V> valueSerializer, UnionCodec hashIndexCodec) {
 
-        super(maxItems, externalSize, comparator);
+        super(maxItems, externalSize, comparator, (KeyMemoryManager) kMM);
         assert Math.pow( 2, hashIndexCodec.getFirstBitSize() ) <= maxItems ;
 
         this.hashIndexCodec = hashIndexCodec;
@@ -177,7 +177,7 @@ class HashChunk<K, V> extends BasicChunk<K, V> {
     int compareKeyAndEntryIndex(KeyBuffer tempKeyBuff, K key, int ei) {
         boolean isAllocated = entryHashSet.readKey(tempKeyBuff, ei);
         assert isAllocated;
-        return comparator.compareKeyAndSerializedKey(key, tempKeyBuff);
+        return kMM.compareKeyAndSerializedKey(key, tempKeyBuff, comparator);
     }
 
     /**
@@ -204,7 +204,12 @@ class HashChunk<K, V> extends BasicChunk<K, V> {
     void lookUp(ThreadContext ctx, K key) {
         int keyHash = calculateKeyHash(key, ctx);
         int idx = calculateEntryIdx(key, keyHash);
-        entryHashSet.lookUp(ctx, key, idx, keyHash);
+        if (entryHashSet.lookUp(ctx, key, idx, keyHash)) {
+            // update how entry accesses it took to find the key
+            int diff = ctx.entryIndex - idx;
+            statistics.addVal4Average(
+                (diff >= 0) ? diff + 1 : entryHashSet.entriesCapacity + diff + 1);
+        }
     }
 
     /********************************************************************************************/
@@ -302,7 +307,8 @@ class HashChunk<K, V> extends BasicChunk<K, V> {
     void printSummaryDebug() {
         System.out.print(" Entries: " + statistics.getTotalCount() + ", capacity: "
             + entryHashSet.entriesCapacity + ", collisions: "
-            + entryHashSet.getCollisionChainLength() + ", average accesses: ");
+            + entryHashSet.getCollisionChainLength() + ", average accesses: "
+            + statistics.getAverage());
     }
 
     /********************************************************************************************/
