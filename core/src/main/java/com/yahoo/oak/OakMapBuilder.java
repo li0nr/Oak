@@ -128,8 +128,8 @@ public class OakMapBuilder<K, V> {
             this.memoryAllocator = new NativeMemoryAllocator(memoryCapacity);
         }
 
-        MemoryManager valuesMemoryManager = new SyncRecycleMemoryManager(memoryAllocator);
-        KeyMemoryManager keysMemoryManager = new SyncRecycleMemoryManager(memoryAllocator);
+        MemoryManager valuesMemoryManager = new NovaMemoryManager(memoryAllocator);
+        KeyMemoryManager keysMemoryManager = new NovaMemoryManager(memoryAllocator);
         checkPreconditions();
         if (minKey == null) {
             throw new IllegalStateException("Must provide a non-null minimal key object to build the OakMap");
