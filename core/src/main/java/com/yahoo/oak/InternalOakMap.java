@@ -597,18 +597,24 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
 
     // the zero-copy version of get
     OakUnscopedBuffer get(K key) { //TODO what to do if key is deleted?
-        if (key == null) {
-            throw new NullPointerException();
+        for (int i = 0; i < MAX_RETRIES; i++) {
+            try {    
+                if (key == null) {
+                        throw new NullPointerException();
+                    }
+    
+                ThreadContext ctx = getThreadContext();
+                OrderedChunk<K, V> c = findChunk(key); // find orderedChunk matching key
+                c.lookUp(ctx, key);
+                if (!ctx.isValueValid()) {
+                    return null;
+                }
+                return getValueUnscopedBuffer(ctx);
+            } catch (ErrorLockException e) {
+                continue;
+            }
         }
-
-        ThreadContext ctx = getThreadContext();
-        OrderedChunk<K, V> c = findChunk(key); // find orderedChunk matching key
-        c.lookUp(ctx, key);
-        if (!ctx.isValueValid()) {
-            return null;
-        }
-        return getValueUnscopedBuffer(ctx);
-
+        throw new RuntimeException("remove failed: reached retry limit (1024).");
     }
 
     // if key with a valid value exists in the map, apply compute function on the value
