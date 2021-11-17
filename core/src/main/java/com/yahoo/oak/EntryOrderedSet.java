@@ -314,15 +314,18 @@ class EntryOrderedSet<K, V> extends EntryArray<K, V> {
     }
     
     void releaseAllDeletedKeys() {
-        KeyBuffer key = new KeyBuffer(keysMemoryManager.getEmptySlice());
+        ThreadContext ctx = new ThreadContext(keysMemoryManager, valuesMemoryManager);
+        
         for (int i = 0; i < getNumOfEntries(); i++) {
-            if (valuesMemoryManager.isReferenceDeleted(getValueReference(i))) {
+            ctx.entryIndex = i;
+            this.readValue(ctx);
+            if (!ctx.isValueValid()) {
                 if (keysMemoryManager.isReferenceValidAndNotDeleted(getKeyReference(i))) {
                     //TODO may add exception to isDelted and stop deleting if key is already deleted
-                    key.s.decodeReference(getKeyReference(i));
-                    if (key.s.isDeleted() != ValueResult.TRUE) {
-                        if (key.s.logicalDelete() == ValueResult.TRUE) {
-                            key.s.release();
+                    ctx.key.s.decodeReference(getKeyReference(i));
+                    if (ctx.key.s.isDeleted() != ValueResult.TRUE) {
+                        if (ctx.key.s.logicalDelete() == ValueResult.TRUE) {
+                            ctx.key.s.release();
                         }
                     }
                 }
