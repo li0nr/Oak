@@ -304,9 +304,6 @@ class SeqExpandMemoryManager implements MemoryManager, KeyMemoryManager  {
         private void updateOnSameBlock(int offset, int length) {
             this.offset = offset;
             this.length = length;
-            if(memAddress == UNDEFINED_LENGTH_OR_OFFSET_OR_ADDRESS) {
-            	return ;
-            }
             assert memAddress != UNDEFINED_LENGTH_OR_OFFSET_OR_ADDRESS;
             this.associated = true;
         }

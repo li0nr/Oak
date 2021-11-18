@@ -163,7 +163,7 @@ public class ComputeTest {
         }
 
         latch.countDown();
-        executor.shutdown(TIME_LIMIT_IN_SECONDS);
+        //executor.shutdown(TIME_LIMIT_IN_SECONDS);
 
         for (int i = 0; i < numOfEntries; i++) {
             ByteBuffer key = ByteBuffer.allocate(KEY_SIZE * Integer.BYTES);
