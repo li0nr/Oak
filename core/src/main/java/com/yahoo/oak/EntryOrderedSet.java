@@ -329,4 +329,24 @@ class EntryOrderedSet<K, V> extends EntryArray<K, V> {
             }
         }
     }
+    
+    int  releaseAllDeletedKeys1() {
+        int tmp = 0;
+        KeyBuffer key = new KeyBuffer(keysMemoryManager.getEmptySlice());
+        for (int i = 0; i < getNumOfEntries(); i++) {
+            if (valuesMemoryManager.isReferenceDeleted(getValueReference(i))) {
+                if (keysMemoryManager.isReferenceValidAndNotDeleted(getKeyReference(i))) {
+                    //TODO may add exception to isDelted and stop deleting if key is already deleted
+                    key.s.decodeReference(getKeyReference(i));
+                    if (key.s.isDeleted() != ValueResult.TRUE) {
+                        if (key.s.logicalDelete() == ValueResult.TRUE) {
+                            key.s.release();
+                            tmp ++;
+                        }
+                    }
+                }
+            }
+        }
+        return tmp;
+    }
 }

@@ -226,6 +226,14 @@ class OrderedChunk<K, V> extends BasicChunk<K, V> {
             entryOrderedSet.releaseAllDeletedKeys();
         }
     }
+    
+    int calc() {
+        if (releaseKeys) {
+            return entryOrderedSet.releaseAllDeletedKeys1();
+        } else {
+            return 0;
+        }
+    }
 
     /********************************************************************************************/
     /*-----------------------  Methods for looking up item in this chunk -----------------------*/

@@ -99,6 +99,23 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
             super.close();
         }
     }
+    
+    void calc() {
+        OrderedChunk<K, V> curr = head.get();
+        OrderedChunk<K, V> next = curr.next.getReference();
+
+        // since skiplist isn't updated atomically in split/compaction, our key might belong in the next orderedChunk
+        // we need to iterate the chunks until we find the correct one
+        int tmp = 0;
+        if (curr.releaseKeys) {
+            while ((next != null)) {
+                tmp += curr.calc();
+                curr = next;
+                next = curr.next.getReference();
+            }
+        }
+        System.out.print("relaese lock keys" + tmp);
+    }
 
     // yet another object started to refer to this internal map
     void open() {

@@ -584,6 +584,9 @@ public class OakMap<K, V> extends AbstractMap<K, V>
         internalOakMap.close();
     }
 
+    public void calc() {
+        internalOakMap.calc();
+    }
 
     /* ---------------- Private utility methods -------------- */
 

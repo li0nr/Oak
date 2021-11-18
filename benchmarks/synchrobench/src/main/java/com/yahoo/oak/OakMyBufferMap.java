@@ -127,6 +127,7 @@ public class OakMyBufferMap<K extends MyBuffer, V extends MyBuffer> implements C
 
     @Override
     public void clear() {
+    	oak.calc();
         oak.close();
 
         ma = new NativeMemoryAllocator(OAK_MAX_OFF_MEMORY);

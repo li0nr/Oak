@@ -129,7 +129,7 @@ public class OakMapBuilder<K, V> {
         }
 
         MemoryManager valuesMemoryManager = new SyncRecycleMemoryManager(memoryAllocator);
-        KeyMemoryManager keysMemoryManager = new SeqExpandMemoryManager(memoryAllocator);
+        KeyMemoryManager keysMemoryManager = new SyncRecycleMemoryManager(memoryAllocator);
         checkPreconditions();
         if (minKey == null) {
             throw new IllegalStateException("Must provide a non-null minimal key object to build the OakMap");
