@@ -329,7 +329,7 @@ public class EntryArray<K, V> {
             return false;
         }
         long reference = getValueReference(ei);
-        return value.getSlice().decodeReference(reference);
+        return value.getSlice().decodeReference(reference,true);
     }
 
     /**

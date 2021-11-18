@@ -212,6 +212,13 @@ class SeqExpandMemoryManager implements MemoryManager, KeyMemoryManager  {
             return false;
         }
 
+        public boolean decodeReference(long reference, boolean val) {
+            if (decode(reference)) {
+                allocator.readMemoryAddress(this);
+                return true;
+            }
+            return false;
+        }
         /**
          * @param reference the reference to decode
          *                  (and to put the information from reference to this slice)
@@ -297,6 +304,9 @@ class SeqExpandMemoryManager implements MemoryManager, KeyMemoryManager  {
         private void updateOnSameBlock(int offset, int length) {
             this.offset = offset;
             this.length = length;
+            if(memAddress == UNDEFINED_LENGTH_OR_OFFSET_OR_ADDRESS) {
+            	return ;
+            }
             assert memAddress != UNDEFINED_LENGTH_OR_OFFSET_OR_ADDRESS;
             this.associated = true;
         }

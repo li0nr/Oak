@@ -128,7 +128,7 @@ public class OakMapBuilder<K, V> {
             this.memoryAllocator = new NativeMemoryAllocator(memoryCapacity);
         }
 
-        MemoryManager valuesMemoryManager = new SyncRecycleMemoryManager(memoryAllocator);
+        MemoryManager valuesMemoryManager = new SeqExpandMemoryManager(memoryAllocator);
         KeyMemoryManager keysMemoryManager = new SeqExpandMemoryManager(memoryAllocator);
         checkPreconditions();
         if (minKey == null) {

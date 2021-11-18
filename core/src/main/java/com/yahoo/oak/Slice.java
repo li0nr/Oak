@@ -54,6 +54,8 @@ interface Slice {
      */
     boolean decodeReference(long reference);
 
+    default boolean decodeReference(long reference, boolean val) {return true;};
+
     /* ------------------------------------------------------------------------------------
      * Slices duplication and info transfer
      * ------------------------------------------------------------------------------------*/

@@ -224,7 +224,7 @@ class EntryOrderedSet<K, V> extends EntryArray<K, V> {
         if (casEntryFieldLong(ctx.entryIndex, VALUE_REF_OFFSET, expectedReference, newReference)) {
             assert valuesMemoryManager.isReferenceConsistent(getValueReference(ctx.entryIndex));
             numOfEntries.getAndDecrement();
-            ctx.value.getSlice().release();
+            //ctx.value.getSlice().release();
             ctx.value.invalidate();
             ctx.entryState = EntryState.DELETED;
 
