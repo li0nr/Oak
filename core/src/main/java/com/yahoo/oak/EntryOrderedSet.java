@@ -6,6 +6,7 @@
 
 package com.yahoo.oak;
 
+import com.yahoo.oak.BasicChunk.Statistics;
 import com.yahoo.oak.ValueUtils.ValueResult;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -313,10 +314,10 @@ class EntryOrderedSet<K, V> extends EntryArray<K, V> {
         return true;
     }
     
-    void releaseAllDeletedKeys() {
+    void  releaseAllDeletedKeys() {
         ThreadContext ctx = new ThreadContext(keysMemoryManager, valuesMemoryManager);
         
-        for (int i = 0; i < getNumOfEntries(); i++) {
+        for (int i = 0; i < OrderedChunk.ORDERED_CHUNK_MAX_ITEMS_DEFAULT; i++) {
             ctx.entryIndex = i;
             this.readValue(ctx);
             if (!ctx.isValueValid()) {
