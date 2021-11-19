@@ -221,8 +221,7 @@ class OrderedChunk<K, V> extends BasicChunk<K, V> {
     }
     
     void release() {
-        state.compareAndSet(State.FROZEN, State.RELEASED);
-        if (releaseKeys) {
+        if (state.compareAndSet(State.FROZEN, State.RELEASED) && releaseKeys) {
             entryOrderedSet.releaseAllDeletedKeys();
         }
     }

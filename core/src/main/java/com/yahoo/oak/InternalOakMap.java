@@ -600,9 +600,8 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
         for (int i = 0; i < MAX_RETRIES; i++) {
             try {    
                 if (key == null) {
-                        throw new NullPointerException();
-                    }
-    
+                    throw new NullPointerException();
+                }
                 ThreadContext ctx = getThreadContext();
                 OrderedChunk<K, V> c = findChunk(key); // find orderedChunk matching key
                 c.lookUp(ctx, key);
