@@ -28,10 +28,11 @@ class OrderedChunk<K, V> extends BasicChunk<K, V> {
     /*-------------- Members --------------*/
     KeyBuffer minKey;       // minimal key that can be put in this chunk
     AtomicMarkableReference<OrderedChunk<K, V>> next;
-    private final EntryOrderedSet<K, V> entryOrderedSet;
+    protected final EntryOrderedSet<K, V> entryOrderedSet;
 
     // # of sorted items at entry-array's beginning (resulting from split)
     private final AtomicInteger sortedCount;
+    protected final AtomicInteger referenceCount;
 
     /*-------------- Constructors --------------*/
     /**
@@ -41,12 +42,13 @@ class OrderedChunk<K, V> extends BasicChunk<K, V> {
     private OrderedChunk(int maxItems, AtomicInteger externalSize, MemoryManager vMM, MemoryManager kMM,
         OakComparator<K> comparator, OakSerializer<K> keySerializer,
         OakSerializer<V> valueSerializer) {
-        super(maxItems, externalSize, comparator);
+        super(maxItems, externalSize, comparator, (KeyMemoryManager) kMM);
         this.entryOrderedSet =
             new EntryOrderedSet<>(vMM, kMM, maxItems, keySerializer, valueSerializer);
         // sortedCount keeps the number of  subsequent and ordered entries in the entries array,
         // which are subject to binary search
         this.sortedCount = new AtomicInteger(0);
+        this.referenceCount = new AtomicInteger(0);
         this.minKey = new KeyBuffer(kMM.getEmptySlice());
         this.next = new AtomicMarkableReference<>(null, false);
     }
@@ -219,6 +221,13 @@ class OrderedChunk<K, V> extends BasicChunk<K, V> {
     private int getLastSortedEntryIndex(int sortedCount) {
         return sortedCount - 1;
     }
+    
+    void release() {
+        state.compareAndSet(State.FROZEN, State.RELEASED);
+        if (releaseKeys && referenceCount.get() == 0) {
+            entryOrderedSet.releaseAllDeletedKeys();
+        }
+    }
 
     /********************************************************************************************/
     /*-----------------------  Methods for looking up item in this chunk -----------------------*/
@@ -236,7 +245,7 @@ class OrderedChunk<K, V> extends BasicChunk<K, V> {
     int compareKeyAndEntryIndex(KeyBuffer tempKeyBuff, K key, int ei) {
         boolean isAllocated = entryOrderedSet.readKey(tempKeyBuff, ei);
         assert isAllocated;
-        return comparator.compareKeyAndSerializedKey(key, tempKeyBuff);
+        return kMM.compareKeyAndSerializedKey(key, tempKeyBuff, comparator);
     }
 
     /**
@@ -815,7 +824,7 @@ class OrderedChunk<K, V> extends BasicChunk<K, V> {
                 // we are on the last chunk and 'to' is not null
                 return true;
             }
-            int c = comparator.compareKeyAndSerializedKey(endBound, key);
+            int c = ((KeyMemoryManager) kMM).compareKeyAndSerializedKey(endBound, key, comparator);
             // return true if endBound<key or endBound==key and the scan was not endBoundInclusive
             return c < 0 || (c == 0 && !endBoundInclusive);
         }
@@ -997,7 +1006,7 @@ class OrderedChunk<K, V> extends BasicChunk<K, V> {
             if (endBound == null) {
                 return false;
             }
-            int c = comparator.compareKeyAndSerializedKey(endBound, key);
+            int c = ((KeyMemoryManager) kMM).compareKeyAndSerializedKey(endBound, key, comparator);
             // return true if endBound>key or if endBound==key and the scan was not endBoundInclusive
             return c > 0 || (c == 0 && !endBoundInclusive);
         }
