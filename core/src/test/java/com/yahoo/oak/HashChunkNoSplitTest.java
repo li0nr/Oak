@@ -339,6 +339,8 @@ public class HashChunkNoSplitTest {
                 Assert.assertFalse(ctxInserter.isKeyValid());
                 Assert.assertFalse(ctxInserter.isValueValid());
             }
+            Assert.assertTrue(c.externalSize.get() <= (MAX_ITEMS_PER_CHUNK / 5));
+
         });
 
         inserter.start();
