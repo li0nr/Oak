@@ -23,7 +23,7 @@ abstract class BasicChunk<K, V> {
     /*-------------- Members --------------*/
     // to compare serilized and object keys
     protected OakComparator<K> comparator;
-    protected KeyMemoryManager kMM;
+    protected MemoryManager kMM;
     // in split/compact process, represents parent of split (can be null!)
     private final AtomicReference<BasicChunk<K, V>> creator;
     // chunk can be in the following states: normal, frozen or infant(has a creator)
@@ -40,7 +40,7 @@ abstract class BasicChunk<K, V> {
      * This constructor is only used internally to instantiate a BasicChunk without a creator and a state.
      * The caller should set the creator and state before returning the BasicChunk to the user.
      */
-    protected BasicChunk(int maxItems, AtomicInteger externalSize, OakComparator<K> comparator, KeyMemoryManager kMM) {
+    protected BasicChunk(int maxItems, AtomicInteger externalSize, OakComparator<K> comparator, MemoryManager kMM) {
         this.maxItems = maxItems;
         this.externalSize = externalSize;
         this.comparator = comparator;

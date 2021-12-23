@@ -24,7 +24,7 @@ class InternalOakHash<K, V> extends InternalOakBasics<K, V> {
 
     /*-------------- Constructors --------------*/
     InternalOakHash(OakSerializer<K> keySerializer, OakSerializer<V> valueSerializer,
-        OakComparator<K> oakComparator, MemoryManager vMM, KeyMemoryManager kMM,
+        OakComparator<K> oakComparator, MemoryManager vMM, MemoryManager kMM,
         ValueUtils valueOperator, int firstLevelBitSize, int secondLevelBitSize) {
 
         super(vMM, kMM, keySerializer, valueSerializer);

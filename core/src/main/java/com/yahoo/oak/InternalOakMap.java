@@ -43,7 +43,7 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
      */
 
     InternalOakMap(K minKey, OakSerializer<K> keySerializer, OakSerializer<V> valueSerializer,
-        OakComparator<K> oakComparator, MemoryManager vMM, KeyMemoryManager kMM, int chunkMaxItems,
+        OakComparator<K> oakComparator, MemoryManager vMM, MemoryManager kMM, int chunkMaxItems,
         ValueUtils valueOperator) {
 
         super(vMM, kMM, keySerializer, valueSerializer);
@@ -55,16 +55,16 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
         Comparator<Object> mixedKeyComparator = (o1, o2) -> {
             if (o1 instanceof OakScopedReadBuffer) {
                 if (o2 instanceof OakScopedReadBuffer) {
-                    return ((KeyMemoryManager) kMM).compareSerializedKeys((OakScopedReadBuffer) o1,
+                    return KeyUtils.compareSerializedKeys((OakScopedReadBuffer) o1,
                             (OakScopedReadBuffer) o2, oakComparator);
                 } else {
                     // Note the inversion of arguments, hence sign flip
-                    return (-1) * ((KeyMemoryManager) kMM).compareKeyAndSerializedKey((K) o2,
+                    return (-1) * KeyUtils.compareKeyAndSerializedKey((K) o2,
                             (OakScopedReadBuffer) o1, oakComparator);
                 }
             } else {
                 if (o2 instanceof OakScopedReadBuffer) {
-                    return ((KeyMemoryManager) kMM).compareKeyAndSerializedKey((K) o1,
+                    return KeyUtils.compareKeyAndSerializedKey((K) o1,
                             (OakScopedReadBuffer) o2, oakComparator);
                 } else {
                     return oakComparator.compareKeys((K) o1, (K) o2);
@@ -127,7 +127,7 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
 
         // since skiplist isn't updated atomically in split/compaction, our key might belong in the next orderedChunk
         // we need to iterate the chunks until we find the correct one
-        while ((next != null) && (keysMemoryManager.compareKeyAndSerializedKey(key, next.minKey, comparator) >= 0)) {
+        while ((next != null) && (KeyUtils.compareKeyAndSerializedKey(key, next.minKey, comparator) >= 0)) {
             curr = next;
             next = curr.next.getReference();
         }
@@ -916,7 +916,7 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
             if (lo == null) {
                 return false;
             }
-            int c = keysMemoryManager.compareKeyAndSerializedKey(lo, key, comparator);
+            int c = KeyUtils.compareKeyAndSerializedKey(lo, key, comparator);
             return c > 0 || (c == 0 && !loInclusive);
         }
 
@@ -924,7 +924,7 @@ class InternalOakMap<K, V>  extends InternalOakBasics<K, V> {
             if (hi == null) {
                 return false;
             }
-            int c = keysMemoryManager.compareKeyAndSerializedKey(hi, key, comparator);
+            int c = KeyUtils.compareKeyAndSerializedKey(hi, key, comparator);
             return c < 0 || (c == 0 && !hiInclusive);
         }
 

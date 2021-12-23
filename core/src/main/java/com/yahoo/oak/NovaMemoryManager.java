@@ -6,8 +6,6 @@
 
 package com.yahoo.oak;
 
-import com.yahoo.oak.ValueUtils.ValueResult;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -15,7 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLongArray;
 
 
-class NovaMemoryManager implements MemoryManager, KeyMemoryManager {
+class NovaMemoryManager implements MemoryManager {
     static final int RELEASE_LIST_LIMIT = 124;
     static final int CACHE_PADDING = 8;
     static final int IDENTRY = 0;
@@ -524,27 +522,5 @@ class NovaMemoryManager implements MemoryManager, KeyMemoryManager {
             HEADER.logicalDelete(version, getMetadataAddress());
         }
 
-    }
-    @Override
-    public <K> int compareKeyAndSerializedKey(K key, OakScopedReadBuffer serializedKey, OakComparator<K> cmp) {
-        if (((ScopedReadBuffer) serializedKey).s.lockRead() != ValueResult.TRUE) {
-            throw new DeletedMemoryAccessException();
-        }
-        int res = cmp.compareKeyAndSerializedKey(key, serializedKey);
-        ((ScopedReadBuffer) serializedKey).s.unlockRead();
-        return res;
-    }
-    
-    @Override
-    public <K> int compareSerializedKeys(OakScopedReadBuffer serializedKey1,
-            OakScopedReadBuffer serializedKey2, OakComparator<K> cmp) {
-        if (    ((ScopedReadBuffer) serializedKey1).s.lockRead() != ValueResult.TRUE ||
-                ((ScopedReadBuffer) serializedKey2).s.lockRead() != ValueResult.TRUE) {
-            throw new DeletedMemoryAccessException();
-        }
-        int res = cmp.compareSerializedKeys(serializedKey1, serializedKey2);
-        ((ScopedReadBuffer) serializedKey1).s.unlockRead();
-        ((ScopedReadBuffer) serializedKey2).s.unlockRead();
-        return res;
     }
 }

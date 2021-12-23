@@ -42,7 +42,7 @@ class OrderedChunk<K, V> extends BasicChunk<K, V> {
     private OrderedChunk(int maxItems, AtomicInteger externalSize, MemoryManager vMM, MemoryManager kMM,
         OakComparator<K> comparator, OakSerializer<K> keySerializer,
         OakSerializer<V> valueSerializer) {
-        super(maxItems, externalSize, comparator, (KeyMemoryManager) kMM);
+        super(maxItems, externalSize, comparator, kMM);
         this.entryOrderedSet =
             new EntryOrderedSet<>(vMM, kMM, maxItems, keySerializer, valueSerializer);
         // sortedCount keeps the number of  subsequent and ordered entries in the entries array,
@@ -245,7 +245,7 @@ class OrderedChunk<K, V> extends BasicChunk<K, V> {
     int compareKeyAndEntryIndex(KeyBuffer tempKeyBuff, K key, int ei) {
         boolean isAllocated = entryOrderedSet.readKey(tempKeyBuff, ei);
         assert isAllocated;
-        return kMM.compareKeyAndSerializedKey(key, tempKeyBuff, comparator);
+        return KeyUtils.compareKeyAndSerializedKey(key, tempKeyBuff, comparator);
     }
 
     /**
@@ -824,7 +824,7 @@ class OrderedChunk<K, V> extends BasicChunk<K, V> {
                 // we are on the last chunk and 'to' is not null
                 return true;
             }
-            int c = ((KeyMemoryManager) kMM).compareKeyAndSerializedKey(endBound, key, comparator);
+            int c = KeyUtils.compareKeyAndSerializedKey(endBound, key, comparator);
             // return true if endBound<key or endBound==key and the scan was not endBoundInclusive
             return c < 0 || (c == 0 && !endBoundInclusive);
         }
@@ -1006,7 +1006,7 @@ class OrderedChunk<K, V> extends BasicChunk<K, V> {
             if (endBound == null) {
                 return false;
             }
-            int c = ((KeyMemoryManager) kMM).compareKeyAndSerializedKey(endBound, key, comparator);
+            int c = KeyUtils.compareKeyAndSerializedKey(endBound, key, comparator);
             // return true if endBound>key or if endBound==key and the scan was not endBoundInclusive
             return c > 0 || (c == 0 && !endBoundInclusive);
         }

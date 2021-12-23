@@ -16,7 +16,7 @@ abstract class InternalOakBasics<K, V> {
     protected static final int MAX_RETRIES = 1024;
 
     private final MemoryManager valuesMemoryManager;
-    protected final KeyMemoryManager keysMemoryManager;
+    protected final MemoryManager keysMemoryManager;
 
     private final OakSerializer<K> keySerializer;
     private final OakSerializer<V> valueSerializer;
@@ -24,7 +24,7 @@ abstract class InternalOakBasics<K, V> {
     protected final AtomicInteger size;
 
     /*-------------- Constructors --------------*/
-    InternalOakBasics(MemoryManager vMM, KeyMemoryManager kMM,
+    InternalOakBasics(MemoryManager vMM, MemoryManager kMM,
                       OakSerializer<K> keySerializer, OakSerializer<V> valueSerializer) {
         this.size = new AtomicInteger(0);
         this.valuesMemoryManager = vMM;
