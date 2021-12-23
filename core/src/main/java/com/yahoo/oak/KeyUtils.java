@@ -21,11 +21,9 @@ class KeyUtils {
         }
         try {
             int res = cmp.compareKeyAndSerializedKey(key, serializedKey);
-            ((ScopedReadBuffer) serializedKey).s.unlockRead();
             return res;
-        } catch (Exception e) {
+        } finally {
             ((ScopedReadBuffer) serializedKey).s.unlockRead();
-            throw e;
         }
     }
     
@@ -37,13 +35,10 @@ class KeyUtils {
         }
         try {
             int res = cmp.compareSerializedKeys(serializedKey1, serializedKey2);
-            ((ScopedReadBuffer) serializedKey1).s.unlockRead();
-            ((ScopedReadBuffer) serializedKey2).s.unlockRead();
             return res;
-        } catch (Exception e) {
+        } finally {
             ((ScopedReadBuffer) serializedKey1).s.unlockRead();
             ((ScopedReadBuffer) serializedKey2).s.unlockRead();
-            throw e;
         }
     }
 }
