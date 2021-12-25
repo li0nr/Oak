@@ -20,8 +20,7 @@ class KeyUtils {
             throw new DeletedMemoryAccessException();
         }
         try {
-            int res = cmp.compareKeyAndSerializedKey(key, serializedKey);
-            return res;
+            return cmp.compareKeyAndSerializedKey(key, serializedKey);
         } finally {
             ((ScopedReadBuffer) serializedKey).s.unlockRead();
         }
@@ -34,8 +33,7 @@ class KeyUtils {
             throw new DeletedMemoryAccessException();
         }
         try {
-            int res = cmp.compareSerializedKeys(serializedKey1, serializedKey2);
-            return res;
+            return cmp.compareSerializedKeys(serializedKey1, serializedKey2);
         } finally {
             ((ScopedReadBuffer) serializedKey1).s.unlockRead();
             ((ScopedReadBuffer) serializedKey2).s.unlockRead();
