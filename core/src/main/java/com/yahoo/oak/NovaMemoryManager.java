@@ -177,15 +177,15 @@ class NovaMemoryManager implements MemoryManager {
     }
 
     /*=====================================================================*/
-    /*           SliceSyncRecycle                 */
-    /* Inner Class for easier access to SyncRecycleMemoryManager abilities */
+    /*           SliceNova                 */
+    /* Inner Class for easier access to NovaMemoryManager abilities */
     /*=====================================================================*/
 
     /**
-     * SliceSyncRecycle represents an data about an off-heap cut:
+     * SliceNova represents an data about an off-heap cut:
      * a portion of a bigger block, which is part of the underlying
      * (recycling and synchronized) managed off-heap memory.
-     * SliceSyncRecycle is allocated only via SyncRecycleMemoryManager,
+     * SliceNova is allocated only via NovaMemoryManager,
      * and can be de-allocated later. Any slice can be either empty or associated with an off-heap cut,
      * which is the aforementioned portion of an off-heap memory.
      */

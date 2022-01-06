@@ -109,42 +109,37 @@ class InternalOakHash<K, V> extends InternalOakBasics<K, V> {
         ThreadContext ctx = getThreadContext();
 
         for (int i = 0; i < MAX_RETRIES; i++) {
-            try {
-                
-                // find chunk matching key, puts this key hash into ctx.operationKeyHash
-                HashChunk<K, V> c = hashArray.findChunk(calculateKeyHash(key, ctx));
-                c.lookUp(ctx, key);
-                // If there is a matching value reference for the given key, and it is not marked as deleted,
-                // then this put changes the slice pointed by this value reference.
-                if (ctx.isValueValid()) {
-                    // there is a value and it is not deleted
-                    Result res = valueOperator.exchange(c, ctx, value, transformer, getValueSerializer());
-                    if (res.operationResult == ValueUtils.ValueResult.TRUE) {
-                        return (V) res.value;
-                    }
-                    helpRebalanceIfInProgress(c);
-                    // Exchange failed because the value was deleted/moved between lookup and exchange. Continue with
-                    // insertion.
-                    continue;
-                }
 
-                if (!publishAndWriteKey(c, ctx, key, value)) {
-                    continue;
+            // find chunk matching key, puts this key hash into ctx.operationKeyHash
+            HashChunk<K, V> c = hashArray.findChunk(calculateKeyHash(key, ctx));
+            c.lookUp(ctx, key);
+            // If there is a matching value reference for the given key, and it is not marked as deleted,
+            // then this put changes the slice pointed by this value reference.
+            if (ctx.isValueValid()) {
+                // there is a value and it is not deleted
+                Result res = valueOperator.exchange(c, ctx, value, transformer, getValueSerializer());
+                if (res.operationResult == ValueUtils.ValueResult.TRUE) {
+                    return (V) res.value;
                 }
-
-                if (c.linkValue(ctx) != ValueUtils.ValueResult.TRUE) {
-                    c.releaseNewValue(ctx);
-                    c.unpublish();
-                } else {
-                    c.unpublish();
-                    checkRebalance(c);
-                    return null; // null can be returned only in zero-copy case
-                }
-            } catch (DeletedMemoryAccessException e) {
+                helpRebalanceIfInProgress(c);
+                // Exchange failed because the value was deleted/moved between lookup and exchange. Continue with
+                // insertion.
                 continue;
             }
+
+            if (!publishAndWriteKey(c, ctx, key, value)) {
+                continue;
+            }
+
+            if (c.linkValue(ctx) != ValueUtils.ValueResult.TRUE) {
+                c.releaseNewValue(ctx);
+                c.unpublish();
+            } else {
+                c.unpublish();
+                checkRebalance(c);
+                return null; // null can be returned only in zero-copy case
+            }
         }
-        
         throw new RuntimeException("put failed: reached retry limit (1024).");
     }
 
@@ -197,7 +192,7 @@ class InternalOakHash<K, V> extends InternalOakBasics<K, V> {
      * @return true if the refresh was successful.
      */
     @Override
-    boolean refreshValuePosition(ThreadContext ctx) { //TODO what we do here?
+    boolean refreshValuePosition(ThreadContext ctx) {
         K deserializedKey = getKeySerializer().deserialize(ctx.key);
         // find chunk matching key, puts this key hash into ctx.operationKeyHash
         HashChunk<K, V> c = hashArray.findChunk(calculateKeyHash(deserializedKey, ctx));
@@ -219,74 +214,68 @@ class InternalOakHash<K, V> extends InternalOakBasics<K, V> {
         ThreadContext ctx = getThreadContext();
 
         for (int i = 0; i < MAX_RETRIES; i++) {
-            
-            try {
-                // find chunk matching key, puts this key hash into ctx.operationKeyHash
-                HashChunk<K, V> c = hashArray.findChunk(calculateKeyHash(key, ctx));
-                c.lookUp(ctx, key);
+            // find chunk matching key, puts this key hash into ctx.operationKeyHash
+            HashChunk<K, V> c = hashArray.findChunk(calculateKeyHash(key, ctx));
+            c.lookUp(ctx, key);
 
-                if (!ctx.isKeyValid()) {
-                    // There is no such key. If we did logical deletion and someone else did the physical deletion,
-                    // then the old value is saved in v. Otherwise v is (correctly) null
+            if (!ctx.isKeyValid()) {
+                // There is no such key. If we did logical deletion and someone else did the physical deletion,
+                // then the old value is saved in v. Otherwise v is (correctly) null
+                return transformer == null ? ctx.result.withFlag(logicallyDeleted) : ctx.result.withValue(v);
+            } else if (!ctx.isValueValid()) {
+                // There is such a key, but the value is invalid,
+                // either deleted (maybe only off-heap) or not yet allocated
+                if (!finalizeDeletion(c, ctx)) {
+                    // finalize deletion returns false, meaning no rebalance was requested
+                    // and there was an attempt to finalize deletion
                     return transformer == null ? ctx.result.withFlag(logicallyDeleted) : ctx.result.withValue(v);
-                } else if (!ctx.isValueValid()) {
-                    // There is such a key, but the value is invalid,
-                    // either deleted (maybe only off-heap) or not yet allocated
-                    if (!finalizeDeletion(c, ctx)) {
-                        // finalize deletion returns false, meaning no rebalance was requested
-                        // and there was an attempt to finalize deletion
-                        return transformer == null ? ctx.result.withFlag(logicallyDeleted) : ctx.result.withValue(v);
-                    }
-                    continue;
                 }
-
-                // AT THIS POINT Key was found (key and value not valid) and context is updated
-                if (logicallyDeleted) {
-                    // This is the case where we logically deleted this entry (marked the value off-heap as deleted),
-                    // but someone helped and (marked the value reference as deleted) and reused the entry
-                    // before we marked the value reference as deleted. We have the previous value saved in v.
-                    return transformer == null ?
-                            ctx.result.withFlag(ValueUtils.ValueResult.TRUE) : ctx.result.withValue(v);
-                } else {
-                    Result removeResult = valueOperator.remove(ctx, oldValue, transformer);
-                    if (removeResult.operationResult == ValueUtils.ValueResult.FALSE) {
-                        // we didn't succeed to remove the value: it didn't contain oldValue, or was already marked
-                        // as deleted by someone else)
-                        return ctx.result.withFlag(ValueUtils.ValueResult.FALSE);
-                    } else if (removeResult.operationResult == ValueUtils.ValueResult.RETRY) {
-                        continue;
-                    }
-                    // we have marked this value as deleted (successful remove)
-                    logicallyDeleted = true;
-                    v = (V) removeResult.value;
-                }
-
-                // AT THIS POINT value was marked deleted off-heap by this thread,
-                // continue to set the entry's value reference as deleted
-                assert ctx.entryIndex != EntryArray.INVALID_ENTRY_INDEX;
-                assert ctx.isValueValid();
-                ctx.entryState = EntryArray.EntryState.DELETED_NOT_FINALIZED;
-
-                if (inTheMiddleOfRebalance(c)) {
-                    continue;
-                }
-
-                // If finalize deletion returns true, meaning rebalance was done and there was NO
-                // attempt to finalize deletion. There is going the help anyway, by next rebalance
-                // or updater. Thus it is OK not to restart, the linearization point of logical deletion
-                // is owned by this thread anyway and old value is kept in v.
-                finalizeDeletion(c, ctx); // includes publish/unpublish
-                return transformer == null ?
-                    ctx.result.withFlag(ValueUtils.ValueResult.TRUE) : ctx.result.withValue(v);
-            } catch (DeletedMemoryAccessException e) {
                 continue;
             }
+
+            // AT THIS POINT Key was found (key and value not valid) and context is updated
+            if (logicallyDeleted) {
+                // This is the case where we logically deleted this entry (marked the value off-heap as deleted),
+                // but someone helped and (marked the value reference as deleted) and reused the entry
+                // before we marked the value reference as deleted. We have the previous value saved in v.
+                return transformer == null ? ctx.result.withFlag(ValueUtils.ValueResult.TRUE) : ctx.result.withValue(v);
+            } else {
+                Result removeResult = valueOperator.remove(ctx, oldValue, transformer);
+                if (removeResult.operationResult == ValueUtils.ValueResult.FALSE) {
+                    // we didn't succeed to remove the value: it didn't contain oldValue, or was already marked
+                    // as deleted by someone else)
+                    return ctx.result.withFlag(ValueUtils.ValueResult.FALSE);
+                } else if (removeResult.operationResult == ValueUtils.ValueResult.RETRY) {
+                    continue;
+                }
+                // we have marked this value as deleted (successful remove)
+                logicallyDeleted = true;
+                v = (V) removeResult.value;
+            }
+
+            // AT THIS POINT value was marked deleted off-heap by this thread,
+            // continue to set the entry's value reference as deleted
+            assert ctx.entryIndex != EntryArray.INVALID_ENTRY_INDEX;
+            assert ctx.isValueValid();
+            ctx.entryState = EntryArray.EntryState.DELETED_NOT_FINALIZED;
+
+            if (inTheMiddleOfRebalance(c)) {
+                continue;
+            }
+
+            // If finalize deletion returns true, meaning rebalance was done and there was NO
+            // attempt to finalize deletion. There is going the help anyway, by next rebalance
+            // or updater. Thus it is OK not to restart, the linearization point of logical deletion
+            // is owned by this thread anyway and old value is kept in v.
+            finalizeDeletion(c, ctx); // includes publish/unpublish
+            return transformer == null ?
+                ctx.result.withFlag(ValueUtils.ValueResult.TRUE) : ctx.result.withValue(v);
         }
 
         throw new RuntimeException("remove failed: reached retry limit (1024).");
     }
 
-    private ThreadContext keyLookUp(K key) { //TODO what we do here?
+    private ThreadContext keyLookUp(K key) {
 
         if (key == null) {
             throw new NullPointerException();
@@ -333,23 +322,18 @@ class InternalOakHash<K, V> extends InternalOakBasics<K, V> {
         ThreadContext ctx = getThreadContext();
 
         for (int i = 0; i < MAX_RETRIES; i++) {
-            
-            try {
-                // find chunk matching key, puts this key hash into ctx.operationKeyHash
-                HashChunk<K, V> c = hashArray.findChunk(calculateKeyHash(key, ctx));
-                c.lookUpForGetOnly(ctx, key);
-                if (!ctx.isValueValid()) {
-                    return null;
-                }
+            // find chunk matching key, puts this key hash into ctx.operationKeyHash
+            HashChunk<K, V> c = hashArray.findChunk(calculateKeyHash(key, ctx));
+            c.lookUpForGetOnly(ctx, key);
+            if (!ctx.isValueValid()) {
+                return null;
+            }
 
-                Result res = valueOperator.transform(ctx.result, ctx.value, transformer);
-                if (res.operationResult == ValueUtils.ValueResult.RETRY) {
-                    continue;
-                }
-                return (T) res.value;
-            } catch (DeletedMemoryAccessException e) {
+            Result res = valueOperator.transform(ctx.result, ctx.value, transformer);
+            if (res.operationResult == ValueUtils.ValueResult.RETRY) {
                 continue;
             }
+            return (T) res.value;
         }
 
         throw new RuntimeException("getValueTransformation failed: reached retry limit (1024).");
@@ -359,26 +343,21 @@ class InternalOakHash<K, V> extends InternalOakBasics<K, V> {
         ThreadContext ctx = getThreadContext();
 
         for (int i = 0; i < MAX_RETRIES; i++) {
-            
-            try {
-                // find chunk matching key, puts this key hash into ctx.operationKeyHash
-                HashChunk<K, V> chunk = hashArray.findChunk(calculateKeyHash(key, ctx));
-                chunk.lookUp(ctx, key);
-                if (!ctx.isValueValid()) {
-                    return null;
-                }
-
-                // will return null if the value is deleted
-                Result result = valueOperator.exchange(chunk, ctx, value,
-                        valueDeserializeTransformer, getValueSerializer());
-                if (result.operationResult != ValueUtils.ValueResult.RETRY) {
-                    return (V) result.value;
-                }
-                // it might be that this chunk is proceeding with rebalance -> help
-                helpRebalanceIfInProgress(chunk);
-            } catch (DeletedMemoryAccessException e) {
-                continue;
+            // find chunk matching key, puts this key hash into ctx.operationKeyHash
+            HashChunk<K, V> chunk = hashArray.findChunk(calculateKeyHash(key, ctx));
+            chunk.lookUp(ctx, key);
+            if (!ctx.isValueValid()) {
+                return null;
             }
+
+            // will return null if the value is deleted
+            Result result = valueOperator.exchange(chunk, ctx, value,
+                    valueDeserializeTransformer, getValueSerializer());
+            if (result.operationResult != ValueUtils.ValueResult.RETRY) {
+                return (V) result.value;
+            }
+            // it might be that this chunk is proceeding with rebalance -> help
+            helpRebalanceIfInProgress(chunk);
         }
 
         throw new RuntimeException("replace failed: reached retry limit (1024).");
@@ -388,27 +367,21 @@ class InternalOakHash<K, V> extends InternalOakBasics<K, V> {
         ThreadContext ctx = getThreadContext();
 
         for (int i = 0; i < MAX_RETRIES; i++) {
-            
-            try {
-                // find chunk matching key, puts this key hash into ctx.operationKeyHash
-                HashChunk<K, V> c = hashArray.findChunk(calculateKeyHash(key, ctx));
-                c.lookUp(ctx, key);
-                if (!ctx.isValueValid()) {
-                    return false;
-                }
+            // find chunk matching key, puts this key hash into ctx.operationKeyHash
+            HashChunk<K, V> c = hashArray.findChunk(calculateKeyHash(key, ctx));
+            c.lookUp(ctx, key);
+            if (!ctx.isValueValid()) {
+                return false;
+            }
 
-                ValueUtils.ValueResult res = valueOperator.compareExchange(c, ctx, oldValue, newValue,
-                    valueDeserializeTransformer, getValueSerializer());
-                if (res == ValueUtils.ValueResult.RETRY) {
-                    // it might be that this chunk is proceeding with rebalance -> help
-                    helpRebalanceIfInProgress(c);
-                    continue;
-                }
-                return res == ValueUtils.ValueResult.TRUE;
-                
-            } catch (DeletedMemoryAccessException e) {
+            ValueUtils.ValueResult res = valueOperator.compareExchange(c, ctx, oldValue, newValue,
+                valueDeserializeTransformer, getValueSerializer());
+            if (res == ValueUtils.ValueResult.RETRY) {
+                // it might be that this chunk is proceeding with rebalance -> help
+                helpRebalanceIfInProgress(c);
                 continue;
             }
+            return res == ValueUtils.ValueResult.TRUE;
         }
 
         throw new RuntimeException("replace failed: reached retry limit (1024).");
@@ -424,44 +397,39 @@ class InternalOakHash<K, V> extends InternalOakBasics<K, V> {
         ThreadContext ctx = getThreadContext();
 
         for (int i = 0; i < MAX_RETRIES; i++) {
-            
-            try {
-                // find chunk matching key, puts this key hash into ctx.operationKeyHash
-                HashChunk<K, V> c = hashArray.findChunk(calculateKeyHash(key, ctx));
-                c.lookUp(ctx, key);
+            // find chunk matching key, puts this key hash into ctx.operationKeyHash
+            HashChunk<K, V> c = hashArray.findChunk(calculateKeyHash(key, ctx));
+            c.lookUp(ctx, key);
 
-                // If exists a matching value reference for the given key, and it isn't marked deleted,
-                // organize the return value: false for ZC, and old value deserialization for non-ZC
-                if (ctx.isValueValid()) {
-                    if (transformer == null) {
-                        return ctx.result.withFlag(ValueUtils.ValueResult.FALSE);
-                    }
-                    Result res = valueOperator.transform(ctx.result, ctx.value, transformer);
-                    if (res.operationResult == ValueUtils.ValueResult.TRUE) {
-                        return res;
-                    }
-                    continue;
+            // If exists a matching value reference for the given key, and it isn't marked deleted,
+            // organize the return value: false for ZC, and old value deserialization for non-ZC
+            if (ctx.isValueValid()) {
+                if (transformer == null) {
+                    return ctx.result.withFlag(ValueUtils.ValueResult.FALSE);
                 }
-
-                // TODO: For current version of OakHash we make an assumption that same keys aren't
-                // TODO: updated simultaneously also not via putIfAbsent API. Therefore, if key wasn't
-                // TODO: found till here, it is OK to proceed with normal put. But this needs to be
-                // TODO: changed once this assignment is refined.
-
-                if (!publishAndWriteKey(c, ctx, key, value)) {
-                    continue;
+                Result res = valueOperator.transform(ctx.result, ctx.value, transformer);
+                if (res.operationResult == ValueUtils.ValueResult.TRUE) {
+                    return res;
                 }
-
-                if (c.linkValue(ctx) != ValueUtils.ValueResult.TRUE) {
-                    c.releaseNewValue(ctx);
-                    c.unpublish();
-                } else {
-                    c.unpublish();
-                    checkRebalance(c);
-                    return ctx.result.withFlag(ValueUtils.ValueResult.TRUE);
-                }
-            } catch (DeletedMemoryAccessException e) {
                 continue;
+            }
+
+            // TODO: For current version of OakHash we make an assumption that same keys aren't
+            // TODO: updated simultaneously also not via putIfAbsent API. Therefore, if key wasn't
+            // TODO: found till here, it is OK to proceed with normal put. But this needs to be
+            // TODO: changed once this assignment is refined.
+
+            if (!publishAndWriteKey(c, ctx, key, value)) {
+                continue;
+            }
+
+            if (c.linkValue(ctx) != ValueUtils.ValueResult.TRUE) {
+                c.releaseNewValue(ctx);
+                c.unpublish();
+            } else {
+                c.unpublish();
+                checkRebalance(c);
+                return ctx.result.withFlag(ValueUtils.ValueResult.TRUE);
             }
         }
 
@@ -478,25 +446,21 @@ class InternalOakHash<K, V> extends InternalOakBasics<K, V> {
         ThreadContext ctx = getThreadContext();
 
         for (int i = 0; i < MAX_RETRIES; i++) {
-            try {
-                // find chunk matching key, puts this key hash into ctx.operationKeyHash
-                HashChunk<K, V> c = hashArray.findChunk(calculateKeyHash(key, ctx));
-                c.lookUp(ctx, key);
+            // find chunk matching key, puts this key hash into ctx.operationKeyHash
+            HashChunk<K, V> c = hashArray.findChunk(calculateKeyHash(key, ctx));
+            c.lookUp(ctx, key);
 
-                if (ctx.isValueValid()) {
-                    ValueUtils.ValueResult res = valueOperator.compute(ctx.value, computer);
-                    if (res == ValueUtils.ValueResult.TRUE) {
-                        // compute was successful and the value wasn't found deleted; in case
-                        // this value was already marked as deleted, continue to construct another slice
-                        return true;
-                    } else if (res == ValueUtils.ValueResult.RETRY) {
-                        continue;
-                    }
+            if (ctx.isValueValid()) {
+                ValueUtils.ValueResult res = valueOperator.compute(ctx.value, computer);
+                if (res == ValueUtils.ValueResult.TRUE) {
+                    // compute was successful and the value wasn't found deleted; in case
+                    // this value was already marked as deleted, continue to construct another slice
+                    return true;
+                } else if (res == ValueUtils.ValueResult.RETRY) {
+                    continue;
                 }
-                return false;
-            } catch (DeletedMemoryAccessException e) {
-                continue;
             }
+            return false;
         }
 
         throw new RuntimeException("computeIfPresent failed: reached retry limit (1024).");
@@ -513,48 +477,44 @@ class InternalOakHash<K, V> extends InternalOakBasics<K, V> {
         ThreadContext ctx = getThreadContext();
 
         for (int i = 0; i < MAX_RETRIES; i++) {
-            
-            try {
-                if (i > MAX_RETRIES - 3) {
-                    System.err.println("Infinite loop..."); //TODO: remove this print
-                }
 
-                // find chunk matching key, puts this key hash into ctx.operationKeyHash
-                HashChunk<K, V> c = hashArray.findChunk(calculateKeyHash(key, ctx));
-                c.lookUp(ctx, key);
+            if (i > MAX_RETRIES - 3) {
+                System.err.println("Infinite loop..."); //TODO: remove this print
+            }
 
-                // If there is a matching value reference for the given key, and it is not marked as deleted,
-                // then apply compute on the existing value
-                if (ctx.isValueValid()) {
-                    ValueUtils.ValueResult res = valueOperator.compute(ctx.value, computer);
-                    if (res == ValueUtils.ValueResult.TRUE) {
-                        // compute was successful and the value wasn't found deleted; in case
-                        // this value was already found as deleted, continue to allocate a new value slice
-                        return false;
-                    } else if (res == ValueUtils.ValueResult.RETRY) {
-                        continue;
-                    }
-                }
+            // find chunk matching key, puts this key hash into ctx.operationKeyHash
+            HashChunk<K, V> c = hashArray.findChunk(calculateKeyHash(key, ctx));
+            c.lookUp(ctx, key);
 
-                // TODO: For current version of OakHash we make an assumption that same keys aren't
-                // TODO: updated simultaneously also not via putIfAbsentComputeIfPresent API.
-                // TODO: Therefore, if key wasn't found till here, it is OK to proceed with normal put.
-                // TODO: But this needs to be changed once this assignment is refined.
-
-                if (!publishAndWriteKey(c, ctx, key, value)) {
+            // If there is a matching value reference for the given key, and it is not marked as deleted,
+            // then apply compute on the existing value
+            if (ctx.isValueValid()) {
+                ValueUtils.ValueResult res = valueOperator.compute(ctx.value, computer);
+                if (res == ValueUtils.ValueResult.TRUE) {
+                    // compute was successful and the value wasn't found deleted; in case
+                    // this value was already found as deleted, continue to allocate a new value slice
+                    return false;
+                } else if (res == ValueUtils.ValueResult.RETRY) {
                     continue;
                 }
+            }
 
-                if (c.linkValue(ctx) != ValueUtils.ValueResult.TRUE) {
-                    c.releaseNewValue(ctx);
-                    c.unpublish();
-                } else {
-                    c.unpublish();
-                    checkRebalance(c);
-                    return true;
-                }
-            } catch (DeletedMemoryAccessException e) {
+            // TODO: For current version of OakHash we make an assumption that same keys aren't
+            // TODO: updated simultaneously also not via putIfAbsentComputeIfPresent API.
+            // TODO: Therefore, if key wasn't found till here, it is OK to proceed with normal put.
+            // TODO: But this needs to be changed once this assignment is refined.
+
+            if (!publishAndWriteKey(c, ctx, key, value)) {
                 continue;
+            }
+
+            if (c.linkValue(ctx) != ValueUtils.ValueResult.TRUE) {
+                c.releaseNewValue(ctx);
+                c.unpublish();
+            } else {
+                c.unpublish();
+                checkRebalance(c);
+                return true;
             }
         }
 

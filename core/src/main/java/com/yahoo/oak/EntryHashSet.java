@@ -299,17 +299,21 @@ class EntryHashSet<K, V> extends EntryArray<K, V> {
             // deleted (EntryState.DELETED/EntryState.DELETED_NOT_FINALIZED)
             // in this case we cannot compare the key (!)
             // also deletion linearization point is checked during getEntryState()
-            if (ctx.entryState != EntryState.DELETED &&
-                ctx.entryState != EntryState.DELETED_NOT_FINALIZED &&
-                isKeyAndEntryKeyEqual(ctx.key, key, ctx.entryIndex, keyHash)) {
-                // EntryState.VALID --> the key is found
-                // DELETED_NOT_FINALIZED --> key doesn't exists
-                //                      and there is no need to continue to check next entries
-                // INSERT_NOT_FINALIZED --> before linearization point, key doesn't exist
-                // when more than unique keys can be concurrently inserted, need to check further!
-                return ctx.entryState == EntryState.VALID;
+            try {
+                if (ctx.entryState != EntryState.DELETED &&
+                        ctx.entryState != EntryState.DELETED_NOT_FINALIZED &&
+                        isKeyAndEntryKeyEqual(ctx.key, key, ctx.entryIndex, keyHash)) {
+                        // EntryState.VALID --> the key is found
+                        // DELETED_NOT_FINALIZED --> key doesn't exists
+                        //                      and there is no need to continue to check next entries
+                        // INSERT_NOT_FINALIZED --> before linearization point, key doesn't exist
+                        // when more than unique keys can be concurrently inserted, need to check further!
+                    return ctx.entryState == EntryState.VALID;
+                }
+                    // not in this entry, move to next
+            } catch (DeletedMemoryAccessException e) {
+                //consider the entry deleted, move to next as well.
             }
-            // not in this entry, move to next
         }
         ctx.invalidate();
         return false;

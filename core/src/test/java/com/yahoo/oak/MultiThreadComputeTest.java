@@ -27,7 +27,7 @@ import java.util.function.Supplier;
 public class MultiThreadComputeTest {
     private static final int NUM_THREADS = 31;
     // prolong due to parameterization, and depending on the hash function
-    private static final long TIME_LIMIT_IN_SECONDS = 120;
+    private static final long TIME_LIMIT_IN_SECONDS = 150;
     private static final int MAX_ITEMS_PER_CHUNK = 256; // was 1024
 
     private ConcurrentZCMap<Integer, Integer> oak;
