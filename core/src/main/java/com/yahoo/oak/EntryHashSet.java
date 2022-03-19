@@ -191,7 +191,7 @@ class EntryHashSet<K, V> extends EntryArray<K, V> {
         }
 
         assert tempKeyBuff.isAssociated();
-        return (0 == config.comparator.compareKeyAndSerializedKey(key, tempKeyBuff));
+        return (0 == KeyUtils.compareEntryKeyAndSerializedKey(key, tempKeyBuff, config.comparator));
     }
 
     /* Check the state of the entry in `idx`
@@ -231,14 +231,18 @@ class EntryHashSet<K, V> extends EntryArray<K, V> {
             // Entry is in insertion process. Return insert_not_finished only if this is the
             // same key, but we shouldn't rely on compare with key marked deleted in the off-heap.
             // Otherwise, return entry is valid and it will be skipped for new insertion.
-            if (isKeyAndEntryKeyEqual(ctx.key, key, idx, keyHash)) {
-                // checking the off-heap key header's delete bit
-                if (ctx.key.getSlice().isDeleted() != ValueUtils.ValueResult.FALSE) {
-                    return isKeyHashValid(idx) ? EntryState.DELETED_NOT_FINALIZED : EntryState.DELETED;
+            try {
+                if (isKeyAndEntryKeyEqual(ctx.key, key, idx, keyHash)) {
+                    // checking the off-heap key header's delete bit
+                    if (ctx.key.getSlice().isDeleted() != ValueUtils.ValueResult.FALSE) {
+                        return isKeyHashValid(idx) ? EntryState.DELETED_NOT_FINALIZED : EntryState.DELETED;
+                    }
+                    return EntryState.INSERT_NOT_FINALIZED;
+                } else {
+                    return EntryState.VALID;
                 }
-                return EntryState.INSERT_NOT_FINALIZED;
-            } else {
-                return EntryState.VALID;
+            } catch (DeletedMemoryAccessException e) {
+                return EntryState.DELETED;
             }
         } else {
             // Both value and key are deleted. Does HashUpdCntValid have valid bit on?
@@ -298,15 +302,19 @@ class EntryHashSet<K, V> extends EntryArray<K, V> {
             // deleted (EntryState.DELETED/EntryState.DELETED_NOT_FINALIZED)
             // in this case we cannot compare the key (!)
             // also deletion linearization point is checked during getEntryState()
-            if (ctx.entryState != EntryState.DELETED &&
-                ctx.entryState != EntryState.DELETED_NOT_FINALIZED &&
-                isKeyAndEntryKeyEqual(ctx.key, key, ctx.entryIndex, keyHash)) {
-                // EntryState.VALID --> the key is found
-                // DELETED_NOT_FINALIZED --> key doesn't exists
-                //                      and there is no need to continue to check next entries
-                // INSERT_NOT_FINALIZED --> before linearization point, key doesn't exist
-                // when more than unique keys can be concurrently inserted, need to check further!
-                return ctx.entryState == EntryState.VALID;
+            try {
+                if (ctx.entryState != EntryState.DELETED &&
+                    ctx.entryState != EntryState.DELETED_NOT_FINALIZED &&
+                    isKeyAndEntryKeyEqual(ctx.key, key, ctx.entryIndex, keyHash)) {
+                    // EntryState.VALID --> the key is found
+                    // DELETED_NOT_FINALIZED --> key doesn't exists
+                    //                      and there is no need to continue to check next entries
+                    // INSERT_NOT_FINALIZED --> before linearization point, key doesn't exist
+                    // when more than unique keys can be concurrently inserted, need to check further!
+                    return ctx.entryState == EntryState.VALID;
+                }
+            } catch (DeletedMemoryAccessException e) {
+                
             }
             // not in this entry, move to next
         }
@@ -353,23 +361,27 @@ class EntryHashSet<K, V> extends EntryArray<K, V> {
 
             // key reference is valid and not deleted, key is read into ctx.key. We will proceed to
             // read the value only if this is key we are looking for
-            if (isKeyAndEntryKeyEqual(ctx.key, key, ctx.entryIndex, keyHash)) {
-                // now it is worth to read the value, which can still be deleted
-                if (!readValue(ctx.value, ctx.entryIndex)) {
-                    // value reference is either deleted or invalid
-                    // there can be multiple possibilities what can be the true state of the entry,
-                    // either INSERT_NOT_FINALIZED or DELETED_NOT_FINALIZED or DELETED
-                    // However from lookUp point of view the value (and the entry) is invalid in each of
-                    // the cases
-                    return false;
+            try {
+                if (isKeyAndEntryKeyEqual(ctx.key, key, ctx.entryIndex, keyHash)) {
+                    // now it is worth to read the value, which can still be deleted
+                    if (!readValue(ctx.value, ctx.entryIndex)) {
+                        // value reference is either deleted or invalid
+                        // there can be multiple possibilities what can be the true state of the entry,
+                        // either INSERT_NOT_FINALIZED or DELETED_NOT_FINALIZED or DELETED
+                        // However from lookUp point of view the value (and the entry) is invalid in each of
+                        // the cases
+                        return false;
+                    }
+                    // if we came till here, the entry (key of which we read in at the beginning) wasn't
+                    // deleted. Check if it wasn't deleted later
+                    if (ctx.keyHashAndUpdateCnt != getKeyHashAndUpdateCounter(ctx.entryIndex)) {
+                        return false;
+                    }
+                    ctx.entryState = EntryState.VALID;
+                    return true;
                 }
-                // if we came till here, the entry (key of which we read in at the beginning) wasn't
-                // deleted. Check if it wasn't deleted later
-                if (ctx.keyHashAndUpdateCnt != getKeyHashAndUpdateCounter(ctx.entryIndex)) {
-                    return false;
-                }
-                ctx.entryState = EntryState.VALID;
-                return true;
+            } catch (DeletedMemoryAccessException e) {
+                
             }
 
             // not in this entry, move to next
@@ -419,10 +431,14 @@ class EntryHashSet<K, V> extends EntryArray<K, V> {
                 // EntryState.INSERT_NOT_FINALIZED --> you can compete to associate value with the same key
                 switch (ctx.entryState) {
                     case VALID:
-                        if (isKeyAndEntryKeyEqual(ctx.key, key, idx, keyHash)) {
-                            // found valid entry has our key, the inserted key must be unique
-                            // the entry state will indicate that insert didn't happen
-                            return true;
+                        try {
+                            if (isKeyAndEntryKeyEqual(ctx.key, key, idx, keyHash)) {
+                                // found valid entry has our key, the inserted key must be unique
+                                // the entry state will indicate that insert didn't happen
+                                return true;
+                            }
+                        } catch (DeletedMemoryAccessException e) {
+                            break;
                         }
                         break;
                     case DELETED_NOT_FINALIZED:
@@ -549,8 +565,12 @@ class EntryHashSet<K, V> extends EntryArray<K, V> {
         // Read the new key from entry again, read may fail (return false) if the new key was both
         // inserted and deleted, in the meanwhile
         if (readKey(ctx.key, ctx.entryIndex)) {
-            if (isKeyAndEntryKeyEqual(ctx.key, key, idx, keyHash)) {
-                return true; // continue to compete on assigning the value
+            try {
+                if (isKeyAndEntryKeyEqual(ctx.key, key, idx, keyHash)) {
+                    return true; // continue to compete on assigning the value
+                }
+            } catch (DeletedMemoryAccessException e) {
+                return allocateEntryAndWriteKey(ctx, key, idx, keyHash);
             }
         }
         // CAS failed as other key was assigned (or current new key is deleted)

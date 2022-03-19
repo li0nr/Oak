@@ -158,7 +158,7 @@ public class OakMapBuilder<K, V> {
         OakSharedConfig<K, V> config = buildSharedConfig(
                 memoryAllocator,
                 // for hash the keys are indeed deleted, thus SeqExpandMemoryManager isn't acceptable
-                new SyncRecycleMemoryManager(memoryAllocator),
+                new NovaMemoryManager(memoryAllocator),
                 new SyncRecycleMemoryManager(memoryAllocator)
         );
 

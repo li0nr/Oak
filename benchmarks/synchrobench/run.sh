@@ -17,21 +17,9 @@ function ctrl_c() {
 ############################################################################
 scenarios=(
   "4a-put"
-  "4b-putIfAbsentComputeIfPresent"
   "4c-get-zc"
-  "4c-get-copy"
-  "4d-95Get5Put"
-  "4e-entrySet-ascend"
-  "4e-entryStreamSet-ascend"
-  "4f-entrySet-descend"
-  "4f-entryStreamSet-descend"
-  "not-random-put"
   "50Pu50Delete"
   "25Put25Delete50Get"
-  "05Put05Delete90Get"
-  "50Pu50Delete_ZC"
-  "25Put25Delete90Get_ZC"
-  "05Put05Delete90Get_ZC"
 )
 
 declare -A data=(
@@ -42,11 +30,11 @@ declare -A data=(
 declare -A benchmarks=(
   ["skip-list"]="com.yahoo.oak.JavaSkipListMap"
   ["oak"]="com.yahoo.oak.OakBenchMap"
-  ["offheap-list"]="com.yahoo.oak.OffHeapList"
+  #["offheap-list"]="com.yahoo.oak.OffHeapList"
   ["concurrent-hash-map"]="com.yahoo.oak.JavaHashMap"
   ["oak-hash"]="com.yahoo.oak.OakBenchHash"
-  ["chronicle"]="com.yahoo.oak.Chronicle"
-  ["memcached"]="com.yahoo.oak.Memcached"
+  #["chronicle"]="com.yahoo.oak.Chronicle"
+  #["memcached"]="com.yahoo.oak.Memcached"
 )
 
 declare -A heap_limit=(
