@@ -20,6 +20,7 @@ scenarios=(
   "4c-get-zc"
   "50Pu50Delete"
   "25Put25Delete50Get"
+
 )
 
 declare -A data=(
@@ -30,33 +31,27 @@ declare -A data=(
 declare -A benchmarks=(
   ["skip-list"]="com.yahoo.oak.JavaSkipListMap"
   ["oak"]="com.yahoo.oak.OakBenchMap"
+  ["skip-list-zgc"]="com.yahoo.oak.JavaSkipListMap"
+
   #["offheap-list"]="com.yahoo.oak.OffHeapList"
-  ["concurrent-hash-map"]="com.yahoo.oak.JavaHashMap"
-  ["oak-hash"]="com.yahoo.oak.OakBenchHash"
+  #["concurrent-hash-map"]="com.yahoo.oak.JavaHashMap"
+  #["oak-hash"]="com.yahoo.oak.OakBenchHash"
   #["chronicle"]="com.yahoo.oak.Chronicle"
   #["memcached"]="com.yahoo.oak.Memcached"
 )
 
 declare -A heap_limit=(
-  ["oak"]="12g"
-  ["offheap-list"]="12g"
-  ["skip-list"]="24g"
-  ["concurrent-hash-map"]="28g"
-  ["oak-hash"]="24g"
-  ["chronicle"]="24g"
-  # Memcached doesn't use the heap
-  ["memcached"]="512m"
+  ["oak"]="6g"
+  ["skip-list"]="17g"
+  ["skip-list-zgc"]="17g"
+
 )
 
 declare -A direct_limit=(
-  ["oak"]="24g"
-  ["offheap-list"]="24g"
-  # when running CSLM/CHM some off-heap memory is still required to unrelated java.util.zip.ZipFile
+  ["oak"]="11g"
   ["skip-list"]="1m"
-  ["concurrent-hash-map"]="1m"
-  ["oak-hash"]="24g"
-  ["chronicle"]="24g"
-  ["memcached"]="1m"
+  ["skip-list-zgc"]="1m"
+
 )
 
 declare -A gc_cmd_args=(
@@ -64,6 +59,7 @@ declare -A gc_cmd_args=(
   ["parallel"]="-XX:+UseParallelOldGC"
   ["concurrent"]="-XX:+UseConcMarkSweepGC"
   ["g1"]="-XX:+UseG1GC"
+  ["zgc"]="-XX:+UseZGC"
 )
 
 # The JDK includes two flavors of the VM -- a client-side offering, and a VM tuned for server applications.
@@ -104,7 +100,7 @@ jar_file_path=$(find "$(pwd)" -name "oak-benchmarks-synchrobench-*.jar" | grep -
 # Iterate on the cartesian product of these arguments (space separated)
 test_scenarios=${scenarios[*]}
 test_benchmarks=${!benchmarks[*]}
-test_thread="01 04 08 12 16 20 24"
+test_thread="01 04 08 12 16 20 24 28 32"
 test_size="10_000_000"
 test_gc="default"
 test_java_modes="server"
@@ -255,8 +251,16 @@ for scenario in ${test_scenarios[*]}; do for bench in ${test_benchmarks[*]}; do
           exit 1
         fi
 
-        gc_args=${gc_cmd_args[${gc_alg}]}
-        java_args="${java_modes[${java_mode}]} -Xmx${heap_size} -XX:MaxDirectMemorySize=${direct_size} ${gc_args}"
+	if [[ "$bench" == "skip-list-zgc" ]]; then
+		gc_args="${gc_cmd_args[${gc_alg}]} -XX:+UseZGC"
+	
+	else 
+		gc_args=${gc_cmd_args[${gc_alg}]}
+		fi
+        java_args="${java_modes[${java_mode}]} -Xmx${heap_size} -XX:MaxDirectMemorySize=${direct_size} ${gc_args} --add-modules jdk.incubator.foreign
+ --add-opens jdk.incubator.foreign/jdk.internal.foreign=ALL-UNNAMED              
+--add-opens java.base/java.nio=ALL-UNNAMED
+--enable-native-access=ALL-UNNAMED"
 
         # Allow using separator for user input
         size=${size//[_,]/}
