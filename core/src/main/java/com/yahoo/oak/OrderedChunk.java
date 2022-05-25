@@ -6,12 +6,13 @@
 
 package com.yahoo.oak;
 
+import com.yahoo.oak.ValueUtils.ValueResult;
+
 import java.util.EmptyStackException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicMarkableReference;
 
-import com.yahoo.oak.ValueUtils.ValueResult;
 
 class OrderedChunk<K, V> extends BasicChunk<K, V> {
     // an entry with NONE_NEXT as its next pointer, points to a null entry
@@ -88,7 +89,7 @@ class OrderedChunk<K, V> extends BasicChunk<K, V> {
      * @param dst the off-heap KeyBuffer to update with the new allocation
      */
     private void duplicateKeyBuffer(KeyBuffer src, KeyBuffer dst) {
-        if(src.s.lockWrite() != ValueResult.TRUE) {
+        if (src.s.lockWrite() != ValueResult.TRUE) {
             throw new DeletedMemoryAccessException();
         }
         final int keySize = src.capacity();
